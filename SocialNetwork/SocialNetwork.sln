@@ -7,6 +7,12 @@ Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "SocialNetwork.Api", "Social
 EndProject
 Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "SocialNetwork.OAuth", "SocialNetwork.OAuth\SocialNetwork.OAuth.xproj", "{E13C280B-C03C-4255-B418-ED31AB66486D}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{36CBE62C-143D-4AED-BDA9-138EB301BFB0}"
+	ProjectSection(SolutionItems) = preProject
+		SocialNetwork.OAuth\cert.cuong-pc.win10.pfx = SocialNetwork.OAuth\cert.cuong-pc.win10.pfx
+		..\README.md = ..\README.md
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
