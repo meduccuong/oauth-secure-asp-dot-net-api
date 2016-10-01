@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using IdentityServer4.Models;
-using IdentityServer4.Services.InMemory;
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +13,8 @@ namespace SocialNetwork.OAuth
         // For more information on how to configure your application, visit http://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddMvc();
+
             services.AddIdentityServer()
                 .AddInMemoryStores()
                 .AddInMemoryClients(Clients.Get())
@@ -37,7 +33,12 @@ namespace SocialNetwork.OAuth
                 app.UseDeveloperExceptionPage();
             }
 
+            app.UseDeveloperExceptionPage();
+
             app.UseIdentityServer();
+
+            app.UseStaticFiles();
+            app.UseMvcWithDefaultRoute();
 
             app.Run(async (context) =>
             {
