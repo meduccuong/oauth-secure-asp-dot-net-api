@@ -49,6 +49,18 @@ namespace SocialNetwork.Web
 
             app.UseStaticFiles();
 
+            app.UseCookieAuthentication(new CookieAuthenticationOptions
+            {
+                AuthenticationScheme = "cookie"
+            });
+
+            app.UseOpenIdConnectAuthentication(new OpenIdConnectOptions
+            {
+                ClientId = "openIdConnectClient",
+                Authority = "https://localhost:44325/",
+                SignInScheme = "cookie"
+            });
+
             app.UseMvc(routes =>
             {
                 routes.MapRoute(
