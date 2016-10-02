@@ -4,6 +4,13 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SocialNetwork.OAuth.Models;
+using System.Reflection;
+using IdentityServer4.EntityFramework.DbContexts;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using IdentityServer4.EntityFramework.Mappers;
+using System.Linq;
 
 namespace SocialNetwork.OAuth
 {
@@ -13,13 +20,25 @@ namespace SocialNetwork.OAuth
         // For more information on how to configure your application, visit http://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
+            const string connectionString = @"Server=.;database=SocialNetwork.OAuth;trusted_connection=yes;";
+            var migrationsAssembly = typeof(Startup).GetTypeInfo().Assembly.GetName().Name;
+
+            // ASP.NET Identity DbContext
+            services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(connectionString));
+
+            // ASP.NET Identity Registrations
+            services.AddIdentity<IdentityUser, IdentityRole>().AddEntityFrameworkStores<ApplicationDbContext>();
+
             services.AddMvc();
 
             services.AddIdentityServer()
-                .AddInMemoryStores()
-                .AddInMemoryClients(Clients.Get())
-                .AddInMemoryScopes(Scopes.Get())
-                .AddInMemoryUsers(Users.Get())
+                .AddOperationalStore(builder =>
+                {
+                    builder.UseSqlServer(connectionString, options => options.MigrationsAssembly(migrationsAssembly));
+                })
+                .AddConfigurationStore(builder =>
+                        builder.UseSqlServer(connectionString, options => options.MigrationsAssembly(migrationsAssembly)))
+                .AddAspNetIdentity<IdentityUser>()
                 .SetTemporarySigningCredential();
         }
 
@@ -35,6 +54,9 @@ namespace SocialNetwork.OAuth
 
             app.UseDeveloperExceptionPage();
 
+            InitializeDbTestData(app);
+
+            app.UseIdentity();
             app.UseIdentityServer();
 
             app.UseStaticFiles();
@@ -44,6 +66,60 @@ namespace SocialNetwork.OAuth
             {
                 await context.Response.WriteAsync("Hello World!");
             });
+        }
+
+        private static void InitializeDbTestData(IApplicationBuilder app)
+        {
+            using (var scope = app.ApplicationServices.GetService<IServiceScopeFactory>().CreateScope())
+            {
+                scope.ServiceProvider.GetRequiredService<PersistedGrantDbContext>().Database.Migrate();
+                scope.ServiceProvider.GetRequiredService<ConfigurationDbContext>().Database.Migrate();
+                scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Database.Migrate();
+
+                var context = scope.ServiceProvider.GetRequiredService<ConfigurationDbContext>();
+
+                if (!context.Clients.Any())
+                {
+                    foreach (var client in Clients.Get())
+                    {
+                        context.Clients.Add(client.ToEntity());
+                    }
+                    context.SaveChanges();
+                }
+
+                if (!context.Scopes.Any())
+                {
+                    foreach (var client in Scopes.Get())
+                    {
+                        context.Scopes.Add(client.ToEntity());
+                    }
+                    context.SaveChanges();
+                }
+
+                var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+                if (!userManager.Users.Any())
+                {
+                    foreach (var inMemoryUser in Users.Get())
+                    {
+                        var identityUser = new IdentityUser(inMemoryUser.Username)
+                        {
+                            Id = inMemoryUser.Subject
+                        };
+
+                        foreach (var claim in inMemoryUser.Claims)
+                        {
+                            identityUser.Claims.Add(new IdentityUserClaim<string>
+                            {
+                                UserId = identityUser.Id,
+                                ClaimType = claim.Type,
+                                ClaimValue = claim.Value,
+                            });
+                        }
+
+                        userManager.CreateAsync(identityUser, "Password123!").Wait();
+                    }
+                }
+            }
         }
     }
 }

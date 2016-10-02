@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Brock Allen & Dominick Baier. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See LICENSE in the project root for license information.
 
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,11 +9,10 @@ using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using IdentityModel;
 using IdentityServer4;
-using IdentityServer4.Models;
 using IdentityServer4.Services;
-using IdentityServer4.Services.InMemory;
-using IdentityServer4.Stores;
 using Microsoft.AspNetCore.Http.Authentication;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using SocialNetwork.OAuth.Models;
 
@@ -27,18 +25,18 @@ namespace SocialNetwork.OAuth.Controllers
     /// </summary>
     public class AccountController : Controller
     {
-        private readonly InMemoryUserLoginService _loginService;
+        private readonly UserManager<IdentityUser> _userManager;
+        //private readonly InMemoryUserLoginService _loginService;
         private readonly IIdentityServerInteractionService _interaction;
-        private readonly IClientStore _clientStore;
 
         public AccountController(
-            InMemoryUserLoginService loginService,
-            IIdentityServerInteractionService interaction,
-            IClientStore clientStore)
+            UserManager<IdentityUser> userManager,
+            //InMemoryUserLoginService loginService,
+            IIdentityServerInteractionService interaction)
         {
-            _loginService = loginService;
+            _userManager = userManager;
+            //_loginService = loginService;
             _interaction = interaction;
-            _clientStore = clientStore;
         }
 
         /// <summary>
@@ -47,19 +45,13 @@ namespace SocialNetwork.OAuth.Controllers
         [HttpGet]
         public async Task<IActionResult> Login(string returnUrl)
         {
+            var vm = new LoginViewModel(HttpContext);
+
             var context = await _interaction.GetAuthorizationContextAsync(returnUrl);
-            if (context?.IdP != null)
+            if (context != null)
             {
-                // if IdP is passed, then bypass showing the login screen
-                return External(context.IdP, returnUrl);
-            }
-
-            var vm = await BuildLoginViewModelAsync(returnUrl, context);
-
-            if (vm.EnableLocalLogin == false && vm.ExternalProviders.Count() == 1)
-            {
-                // only one option for logging in
-                return External(vm.ExternalProviders.First().AuthenticationScheme, returnUrl);
+                vm.Username = context.LoginHint;
+                vm.ReturnUrl = returnUrl;
             }
 
             return View(vm);
@@ -74,6 +66,8 @@ namespace SocialNetwork.OAuth.Controllers
         {
             if (ModelState.IsValid)
             {
+                /*
+                // IN-MEMORY USERS
                 // validate username/password against in-memory store
                 if (_loginService.ValidateCredentials(model.Username, model.Password))
                 {
@@ -90,54 +84,31 @@ namespace SocialNetwork.OAuth.Controllers
                     return Redirect("~/");
                 }
 
+                ModelState.AddModelError("", "Invalid username or password.");*/
+
+
+                // ASP.NET IDENTITY USERS
+                var identityUser = await _userManager.FindByNameAsync(model.Username);
+
+                if (identityUser != null && await _userManager.CheckPasswordAsync(identityUser, model.Password))
+                {
+                    await HttpContext.Authentication.SignInAsync(identityUser.Id, identityUser.UserName);
+
+                    if (_interaction.IsValidReturnUrl(model.ReturnUrl))
+                    {
+                        return Redirect(model.ReturnUrl);
+                    }
+
+                    return Redirect("~/");
+                }
+
                 ModelState.AddModelError("", "Invalid username or password.");
+
             }
 
             // something went wrong, show form with error
-            var vm = await BuildLoginViewModelAsync(model);
+            var vm = new LoginViewModel(HttpContext, model);
             return View(vm);
-        }
-
-        async Task<LoginViewModel> BuildLoginViewModelAsync(string returnUrl, AuthorizationRequest context)
-        {
-            var providers = HttpContext.Authentication.GetAuthenticationSchemes()
-                .Where(x => x.DisplayName != null)
-                .Select(x => new ExternalProvider
-                {
-                    DisplayName = x.DisplayName,
-                    AuthenticationScheme = x.AuthenticationScheme
-                });
-
-            var allowLocal = true;
-            if (context?.ClientId != null)
-            {
-                var client = await _clientStore.FindClientByIdAsync(context.ClientId);
-                if (client != null)
-                {
-                    allowLocal = client.EnableLocalLogin;
-
-                    if (client.IdentityProviderRestrictions != null && client.IdentityProviderRestrictions.Any())
-                    {
-                        providers = providers.Where(provider => client.IdentityProviderRestrictions.Contains(provider.AuthenticationScheme));
-                    }
-                }
-            }
-
-            return new LoginViewModel
-            {
-                EnableLocalLogin = allowLocal,
-                ReturnUrl = returnUrl,
-                Username = context?.LoginHint,
-                ExternalProviders = providers.ToArray()
-            };
-        }
-
-        async Task<LoginViewModel> BuildLoginViewModelAsync(LoginInputModel model)
-        {
-            var context = await _interaction.GetAuthorizationContextAsync(model.ReturnUrl);
-            var vm = await BuildLoginViewModelAsync(model.ReturnUrl, context);
-            vm.Username = model.Username;
-            return vm;
         }
 
         /// <summary>
@@ -193,6 +164,9 @@ namespace SocialNetwork.OAuth.Controllers
             var provider = userIdClaim.Issuer;
             var userId = userIdClaim.Value;
 
+
+            /*
+            //IN-MEMORY USERS
             // check if the external user is already provisioned
             var user = _loginService.FindByExternalProvider(provider, userId);
             if (user == null)
@@ -212,10 +186,35 @@ namespace SocialNetwork.OAuth.Controllers
             }
 
             // issue authentication cookie for user
-            await HttpContext.Authentication.SignInAsync(user.Subject, user.Username, provider, additionalClaims.ToArray());
+            await HttpContext.Authentication.SignInAsync(user.Subject, user.Username, provider, additionalClaims.ToArray());*/
+
+
+            // ASP.NET IDENTITY USERS
+            // check if the external user is already provisioned
+            var user = await _userManager.FindByLoginAsync(provider, userId);
+            if (user == null)
+            {
+                user = new IdentityUser { UserName = Guid.NewGuid().ToString() };
+                await _userManager.CreateAsync(user);
+
+                await _userManager.AddLoginAsync(user, new UserLoginInfo(provider, userId, provider));
+            }
+
+            var additionalClaims = new List<Claim>();
+
+            // if the external system sent a session id claim, copy it over
+            var sid = claims.FirstOrDefault(x => x.Type == JwtClaimTypes.SessionId);
+            if (sid != null)
+            {
+                additionalClaims.Add(new Claim(JwtClaimTypes.SessionId, sid.Value));
+            }
+
+            // issue authentication cookie for user
+            await HttpContext.Authentication.SignInAsync(user.Id, user.UserName, provider, additionalClaims.ToArray());
 
             // delete temporary cookie used during external authentication
             await HttpContext.Authentication.SignOutAsync(IdentityServerConstants.ExternalCookieAuthenticationScheme);
+
 
             // validate return URL and redirect back to authorization endpoint
             if (_interaction.IsValidReturnUrl(returnUrl))
@@ -224,21 +223,15 @@ namespace SocialNetwork.OAuth.Controllers
             }
 
             return Redirect("~/");
+
         }
 
         /// <summary>
         /// Show logout page
         /// </summary>
         [HttpGet]
-        public async Task<IActionResult> Logout(string logoutId)
+        public IActionResult Logout(string logoutId)
         {
-            var context = await _interaction.GetLogoutContextAsync(logoutId);
-            if (context?.ClientId != null)
-            {
-                // if the logout request is authenticated, it's safe to automatically sign-out
-                return await Logout(new LogoutViewModel { LogoutId = logoutId });
-            }
-
             var vm = new LogoutViewModel
             {
                 LogoutId = logoutId
