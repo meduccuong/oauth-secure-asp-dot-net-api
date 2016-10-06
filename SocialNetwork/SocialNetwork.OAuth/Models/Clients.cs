@@ -26,11 +26,25 @@ namespace SocialNetwork.OAuth.Models
                         StandardScopes.Profile.Name,
                         StandardScopes.Email.Name,
                         StandardScopes.Roles.Name,
+                        StandardScopes.OfflineAccess.Name,
                         "customAPI"
                     },
                     RedirectUris = new List<string> {"https://localhost:44320/signin-oidc"},
                     PostLogoutRedirectUris = new List<string> { "https://localhost:44320/" }
-                }
+                },
+                new Client {
+                    ClientId = "resourceOwner",
+                    ClientName = "Example Resource Owner Password Flow Application",
+                    AllowedGrantTypes = GrantTypes.ResourceOwnerPassword,
+                    ClientSecrets = new List<Secret> {
+                        new Secret("superSecretPassword".Sha256())},
+                    AllowedScopes = new List<string>
+                    {
+                        StandardScopes.OfflineAccess.Name,
+                        StandardScopes.Profile.Name,
+                        "customAPI"
+                    }
+                },
             };
         }
     }
