@@ -52,6 +52,12 @@ namespace SocialNetwork.Identity
             // Add application services.
             services.AddTransient<IEmailSender, AuthMessageSender>();
             services.AddTransient<ISmsSender, AuthMessageSender>();
+
+            // IdentityServer
+            services.AddDeveloperIdentityServer()
+                .AddInMemoryScopes(Config.GetScopes())
+                .AddInMemoryClients(Config.GetClients())
+                .AddAspNetIdentity<ApplicationUser>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -74,6 +80,9 @@ namespace SocialNetwork.Identity
             app.UseStaticFiles();
 
             app.UseIdentity();
+
+            // IdentityServer
+            app.UseIdentityServer();
 
             // Add external authentication middleware below. To configure them please see http://go.microsoft.com/fwlink/?LinkID=532715
 
