@@ -1,4 +1,4 @@
-﻿{
+{
   "userSecretsId": "aspnet-SocialNetwork.Identity-a85a6c83-819b-4cc6-8fee-b00067ec44d3",
 
   "dependencies": {
@@ -43,7 +43,9 @@
     "Microsoft.VisualStudio.Web.CodeGenerators.Mvc": {
       "version": "1.0.0-preview2-final",
       "type": "build"
-    }
+    },
+    "IdentityServer4": "1.0.0-rc1-update2",
+    "IdentityServer4.AspNetIdentity": "1.0.0-rc1-update2"
   },
 
   "tools": {
