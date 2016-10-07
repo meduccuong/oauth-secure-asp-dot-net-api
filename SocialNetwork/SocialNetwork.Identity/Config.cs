@@ -39,7 +39,7 @@ namespace SocialNetwork.Identity
                     AllowedGrantTypes = GrantTypes.HybridAndClientCredentials,
 
                     RequireConsent = false,
-
+                    AccessTokenLifetime = 60,
                     ClientSecrets = new List<Secret>
                     {
                         new Secret("secret".Sha256())
